@@ -25,8 +25,6 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
 - Máquina de estados en la variable global `state`: `'playing' | 'dead' | 'gameover'`.
   `initGame()` arranca, `killShip()` gestiona las vidas, `nextLevel()` limpia y regenera.
 
-## Power-up "Velocidad" (no lo rompas)
-
 ## Power-ups (no los rompas)
 
 Hay **dos**, gemelos en estructura: `Velocidad` (cian) y `Triple shot` (magenta). Cada uno
@@ -67,6 +65,31 @@ tiene su constante de duración global, su timer en `Ship`, su barra en el HUD y
 - El indicador en la nariz (game.js:317-327) usa los mismos offsets `[-5, 0, 5]` a propósito:
   muestra la formación real de salida.
 
+## Skins (no lo rompas)
+
+- `SKINS` (game.js:225) es un array de objetos planos con `name`, `hull`, `flame`, `nose`, `rear`,
+  `verts` y `detail` (opcional, polilínea `[[x,y], ...]`). El array **no tiene configuración
+  central**: cada skin lleva sus propias constantes, como el resto del juego. Para añadir una,
+  copia una entrada existente.
+- **`ship.radius` sigue siendo 12 en todas las skins, a propósito.** Las skins son solo geometría
+  y color: si le das un radio propio a una, la hitbox cambia en mitad de partida y las colisiones
+  dejan de ser predecibles. No lo muevas a `SKINS`.
+- Los `verts` caben en **±20 x / ±12 y**: `drawLifeIcon()` los escala con `ctx.scale(0.5, 0.5)` y el
+  HUD los dibuja cada 22 px, así que un polígono de más de 40 px de ancho solapa los iconos de vida.
+- **`pressed('KeyS')` se consulta al principio de `update()`**, antes de las ramas `'gameover'` y
+  `'dead'`, que hacen `return` temprano. Por eso cambiar de skin funciona en los tres estados y el
+  flanco se consume una sola vez por frame. Si mueves la llamada dentro de `'playing'`, en `GAME
+  OVER` el flag queda pendiente y dispara un cambio fantasma al reaparecer.
+- `drawSkinToast()` se llama en `drawHUD()` **antes** de `drawSpeedBar()` por lo mismo que ya
+  documenta la sección de velocidad: `drawSpeedBar()` cambia `ctx.font` a 11px. Va abajo a la
+  izquierda (`14, H - 16`), lejos de la barra de velocidad (`x=14, y=42`).
+- `loadSkin()` / `saveSkin()` van envueltas en `try/catch`: `localStorage` puede lanzar
+  `SecurityError` con `file://` en algunos navegadores. `loadSkin()` valida el índice guardado
+  contra `SKINS.length`; si quitas skins, un índice guardado deja de ser válido y no debe romper
+  el arranque.
+- El cyan `#5cf` está reservado para el boost de velocidad: la llama normal usa el `flame` de la
+  skin, pero con `speedTimer > 0` se sobreescribe a `#5cf` (game.js:373).
+
 ## Estrella fugaz (asteroide especial)
 
 - Clase `Shooter` (game.js:129). Aparece en el array global `shooters`, **2 por nivel**:
@@ -81,15 +104,15 @@ tiene su constante de duración global, su timer en `Ship`, su barra en el HUD y
 - `split()` devuelve `[]` explícitamente. No depende del `if (this.size <= 1) return []`
   de `Asteroid` a propósito: "no se divide" está escrito, no implícito.
 - **No bloquea el avance de nivel.** El check sigue siendo solo
-  `if (asteroids.length === 0) nextLevel()` (game.js:605): `shooters` se ignora. Si añades
+`if (asteroids.length === 0) nextLevel()` (game.js:636): `shooters` se ignora. Si añades
   shooters al check, dejas una estrella huérvana arrastrada al nivel siguiente.
 - `nextLevel()` limpia `shooters` (las entidades no sobreviven al nivel, igual que
   `pickups`). La rama `'gameover'` de `update()` **no** actualiza `shooters`: si lo hiciera,
   se filtrarían en `GAME OVER` sin dibujarse. En `'dead'` sí se mueven, como los asteroides,
-  y hay que filtrarlas ahí (game.js:515-517) porque son lo único que puede morir sin bala:
+y hay que filtrarlas ahí (game.js:551-553) porque son lo único que puede morir sin bala:
   sin ese filtro la estrella caducada seguiría dibujándose hasta 2 s, con el `fade` ya en
   negativo.
-- El bucle de colisión nave-vs-`Shooter` está **guardado con `if (!ship.dead)`** (game.js:594)
+- El bucle de colisión nave-vs-`Shooter` está **guardado con `if (!ship.dead)`** (game.js:625)
   porque va después del de asteroides: sin esa guarda, tocar un asteroide y una estrella en
   el mismo frame descuenta 2 vidas y deja `lives` en negativo.
 - La estela (`Shooter.trail`, 14 muestras) y el `shadowBlur` del resplandor son solo
@@ -110,9 +133,9 @@ tiene su constante de duración global, su timer en `Ship`, su barra en el HUD y
   incogible desde el lado opuesto, y a las `Shooter`, que son rápidas y por eso pasan más
   tiempo cerca de los bordes (tienen una ventana de colisión peor). Si añades colisiones
   nuevas, no asumas que está resuelto.
-- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:249) se aplica por frame,
+- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:311) se aplica por frame,
   no por segundo, y `draw()` consume `Math.random()` para la llama del propulsor. El
-  `dt` sí está acotado a 0.05 s (game.js:711), pero eso no normaliza el drag.
+  `dt` sí está acotado a 0.05 s (game.js:729), pero eso no normaliza el drag.
 - **`draw()` solo pinta el overlay de `GAME OVER`.** El estado `'dead'` no dibuja nada
   especial; si añades una pantalla de "has muerto", hay que añadirla explícitamente.
 - **Índices de tamaño de asteroide**: `1` = pequeño, `2` = mediano, `3` = grande.
@@ -123,9 +146,9 @@ tiene su constante de duración global, su timer en `Ship`, su barra en el HUD y
 
 ## README.md
 
-Las estrellas fugaces ya existen en `game.js` y el README las documenta. `NIVEL`,
-`GAME OVER` y el reinicio con Espacio también. Trata `game.js` como fuente de verdad y
-corrige el README si tocas esas áreas.
+Las estrellas fugaces ya existen en `game.js` y el README las documenta, igual que las
+skins (tecla `S`). `NIVEL`, `GAME OVER` y el reinicio con Espacio también. Trata `game.js`
+como fuente de verdad y corrige el README si tocas esas áreas.
 
 ## Convenciones
 

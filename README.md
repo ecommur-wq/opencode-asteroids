@@ -24,11 +24,12 @@ Luego visita `http://localhost:3000`.
 
 ## Controles
 
-| Tecla     | Acción     |
-| --------- | ---------- |
-| `←` `→`   | Rotar nave |
-| `↑`       | Propulsar  |
-| `Espacio` | Disparar   |
+| Tecla     | Acción                    |
+| --------- | ------------------------- |
+| `←` `→`   | Rotar nave                |
+| `↑`       | Propulsar                 |
+| `Espacio` | Disparar                  |
+| `S`       | Cambiar de skin de nave   |
 
 En la pantalla de `GAME OVER`, `Espacio` reinicia la partida.
 
@@ -79,6 +80,22 @@ Los power-ups sin recoger duran 10 s y parpadean antes de expirar.
 - **No cambia la cadencia**: el cooldown entre disparos sigue siendo de 0.2 s, así que durante
   el efecto salen 15 balas por segundo en vez de 5.
 - Mientras dura, la nariz de la nave muestra tres marcas magenta con la misma formación.
+
+## Skins
+
+- Cinco apariencias para la nave: `CLÁSICA`, `DELTA`, `PLATO`, `CRUZ` y `ESQUIRLA`. Cada una
+  cambia **silueta, color del casco y color de la llama** del propulsor.
+- Se cambian con la tecla `S`, que pasa a la siguiente en bucle. Funciona en cualquier estado
+  (jugando, muerto o en `GAME OVER`).
+- El nombre de la skin activa se ve abajo a la izquierda como `NAVE  <NOMBRE>` y **destella en
+  su propio color** durante un momento al cambiarla.
+- **La elección se recuerda** entre sesiones (`localStorage`); si el navegador lo bloquea, el
+  juego sigue funcionando y vuelve a la primera skin.
+- Las skins son solo apariencia: **la física y el radio de colisión son idénticos en todas**, así que
+  la nave se maneja igual con cualquiera. Los iconos de vida del HUD usan también la silueta
+  activa.
+- Al cambiar de skin, la punta desde la que salen las balas (`nose`) se ajusta a la nueva
+  silueta.
 
 ## Características
 
