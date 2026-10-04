@@ -36,7 +36,35 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
   buff persiste.
 - La barra se dibuja en `drawSpeedBar()` y solo aparece si `speedTimer > 0`. El HUD la
   llama al final de `drawHUD()` porque cambia `ctx.font`; si la mueves al principio, el
-  `font` de 15px del resto del HUD se pisa.
+  `font` de 15px del resto del HUD se pisa. `drawSpeedBar()` no dibuja nada por su cuenta:
+  delega en `drawTimerBar()`, que es la geometría compartida con el escudo.
+
+## Power-up "Escudo" (no lo rompas)
+
+- Copia el patrón de "Velocidad" punto por punto: `SHIELD_DURATION = 5` (game.js:217) es
+  global y lo leen `Ship.update()` y `drawShieldBar()`; `Ship.shieldTimer` se inicializa en
+  el `constructor` (game.js:224), **fuera de `reset()`**, para sobrevivir a la muerte y a
+  `nextLevel()`. `SHIELD_GRACE = 1` (game.js:218) son los segundos de invencibilidad que se
+  dan tras absorber un impacto.
+- `Pickup` ya no es solo de velocidad: lleva `type` (`'speed' | 'shield'`), con `speed` por
+  defecto. El drop es aleatorio 50/50 (game.js:529) y la recogida en `update()` ramifica por
+  `p.type`. No hardcodees el cian ni añadas una segunda clase de pickup: el color y la marca
+  interior (círculo) salen de `this.type` en `Pickup.draw()`.
+- El escudo **no bloquea proyectiles**: no hay balas enemigas en el juego (el array `bullets`
+  solo lo rellena `ship.tryShoot()`). Solo absorbe impactos, en el bloque de colisión
+  nave-vs-entidad de `update()` (game.js:563-594): con `hasShield`, la entidad choca, se marca
+  `dead`, estalla y `shieldTimer` vuelve a 0. Sin puntos y **sin `split()`**: partir el
+  asteroide sobre la nave que acaba de bloquearlo sería matarla igualmente.
+- Los dos `filter()` extra al final de ese bloque (game.js:592-593) son obligatorios: lo
+  absorbido se marca muerto **después** del filtro de game.js:510, así que sin ellos la entidad
+  se dibujaría un frame de más.
+- El bucle de las estrellas se guarda con `if (!ship.dead && !hasShield)`: sin el `hasShield`,
+  un impacto ya absorbido volvería a matar (y a restar una segunda vida) en el mismo frame.
+- Si el impacto absorbido era el último asteroide, el check `if (asteroids.length === 0)
+  nextLevel()` (game.js:597) avanza igual que con una bala. No añadas casos especiales.
+- La burbuja se dibuja en `Ship.draw()` **después** del `ctx.restore()` del bloque rotado
+  (game.js:311), porque es un círculo centrado en la nave y hereda el parpadeo de
+  invencibilidad, incluido el de `SHIELD_GRACE`.
 
 ## Estrella fugaz (asteroide especial)
 
