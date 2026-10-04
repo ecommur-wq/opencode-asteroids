@@ -280,12 +280,15 @@ function cycleSkin() {
 // ── Ship ──────────────────────────────────────────────────────────────────────
 const SPEED_DURATION  = 5;  // s que dura el power-up de velocidad
 const TRIPLE_DURATION = 5;  // s que dura el power-up de triple shot
+const SHIELD_DURATION = 5;  // s que dura el power-up de escudo
+const SHIELD_GRACE    = 1;  // s de invencibilidad tras absorber un impacto
 
 class Ship {
   constructor() {
     // A propósito fuera de reset(): los efectos sobreviven a la muerte y al cambio de nivel
     this.speedTimer = 0;
     this.tripleTimer = 0;
+    this.shieldTimer = 0;
     this.reset();
   }
 
@@ -308,6 +311,7 @@ class Ship {
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     if (this.speedTimer    > 0) this.speedTimer    -= dt;
     if (this.tripleTimer   > 0) this.tripleTimer   -= dt;
+    if (this.shieldTimer   > 0) this.shieldTimer   -= dt;
 
     const ROT   = 3.5;   // rad/s
     const THRUST = 260 * (this.speedTimer > 0 ? 2 : 1);  // px/s² (x2 con "Velocidad")
@@ -331,7 +335,7 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-const nose = SKINS[skinIndex].nose;
+    const nose = SKINS[skinIndex].nose;
     const nx = Math.cos(this.angle);
     const ny = Math.sin(this.angle);
 
@@ -386,19 +390,31 @@ const nose = SKINS[skinIndex].nose;
       ctx.stroke();
     }
 
-    // Triple shot: tres marcas magenta en la nariz, la misma formación que dispara
+    // Triple shot: tres marcas magenta en la nariz, la misma formación que dispara.
+    // Van por delante del `nose` de la skin activa, que es donde nacen las balas.
     if (this.tripleTimer > 0) {
       ctx.strokeStyle = '#f6f';
       ctx.lineWidth = 1.5;
       for (const o of [-5, 0, 5]) {
         ctx.beginPath();
-        ctx.moveTo(22, o);
-        ctx.lineTo(28, o);
+        ctx.moveTo(skin.nose + 1, o);
+        ctx.lineTo(skin.nose + 7, o);
         ctx.stroke();
       }
     }
 
     ctx.restore();
+
+    // Burbuja de escudo: fuera del bloque rotado porque es un círculo centrado en la nave
+    if (this.shieldTimer > 0) {
+      const R = 22;
+      const fade = Math.min(1, this.shieldTimer);   // se apaga en el último s
+      ctx.strokeStyle = `rgba(95,255,95,${(0.25 + 0.6 * fade).toFixed(2)})`;
+      ctx.lineWidth   = 2;
+      ctx.beginPath();
+      ctx.arc(this.x, this.y, R, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 }
 
@@ -434,12 +450,12 @@ class Particle {
   }
 }
 
-// ── Power-ups (Velocidad / Triple shot) ───────────────────────────────────────
+// ── Power-ups (Velocidad / Triple shot / Escudo) ──────────────────────────────
 class Pickup {
   constructor(x, y, kind = 'speed') {
     this.x = x;
     this.y = y;
-    this.kind = kind;   // 'speed' | 'triple'
+    this.kind = kind;   // 'speed' | 'triple' | 'shield'
     this.vx = rand(-25, 25);
     this.vy = rand(-25, 25);
     this.rot = rand(0, Math.PI * 2);
@@ -480,7 +496,9 @@ class Pickup {
         ctx.stroke();
       }
     } else {
-      ctx.strokeStyle = '#5cf';
+      // Cuadrado: cian liso el de velocidad, verde con círculo interior el de escudo
+      const shield = this.kind === 'shield';
+      ctx.strokeStyle = shield ? '#5f5' : '#5cf';
       ctx.beginPath();
       ctx.moveTo(-s, -s);
       ctx.lineTo( s, -s);
@@ -488,6 +506,12 @@ class Pickup {
       ctx.lineTo(-s,  s);
       ctx.closePath();
       ctx.stroke();
+      // Marca interior: sin ella los dos power-ups solo se distinguen por el color
+      if (shield) {
+        ctx.beginPath();
+        ctx.arc(0, 0, s * 0.45, 0, Math.PI * 2);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -621,11 +645,12 @@ function update(dt) {
         a.dead = true;
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
-        // Una sola tirada para que un mismo punto no suelte los dos power-ups:
-        // 4% triple shot y 8% velocidad (la de velocidad conserva su probabilidad)
+        // Una sola tirada para que un mismo punto nunca suelte dos power-ups:
+        // 3% triple shot, 3% escudo y 8% velocidad (la de velocidad conserva su probabilidad)
         const drop = Math.random();
-        if (drop < 0.04)     pickups.push(new Pickup(a.x, a.y, 'triple'));
-        else if (drop < 0.12) pickups.push(new Pickup(a.x, a.y));
+        if (drop < 0.03)          pickups.push(new Pickup(a.x, a.y, 'triple'));
+        else if (drop < 0.06)     pickups.push(new Pickup(a.x, a.y, 'shield'));
+        else if (drop < 0.14)     pickups.push(new Pickup(a.x, a.y));
         newAsteroids.push(...a.split());
       }
     }
@@ -654,21 +679,33 @@ function update(dt) {
     if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
       score += 50;
-      if (p.kind === 'triple') ship.tripleTimer = TRIPLE_DURATION;
-      else                      ship.speedTimer  = SPEED_DURATION;
+      if (p.kind === 'triple')       ship.tripleTimer = TRIPLE_DURATION;
+      else if (p.kind === 'shield')  ship.shieldTimer = SHIELD_DURATION;
+      else                           ship.speedTimer  = SPEED_DURATION;
     }
   }
 
   // Nave vs asteroide / estrella fugaz
   if (ship.invincible <= 0) {
+    // Con escudo el impacto se absorbe: se consume y estalla lo que golpea, sin puntos
+    // ni división. La invencibilidad extra evita morir por otro impacto acto seguido.
+    const hasShield = ship.shieldTimer > 0;
     for (const a of asteroids) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
-        killShip();
+        if (hasShield) {
+          a.dead = true;
+          explode(a.x, a.y, a.size * 5);
+          ship.shieldTimer = 0;
+          ship.invincible  = SHIELD_GRACE;
+        } else {
+          killShip();
+        }
         break;
       }
     }
-    // La guarda !ship.dead evita morir dos veces en el mismo frame (y perder 2 vidas)
-    if (!ship.dead) {
+    // Las guardas evitan morir dos veces en el mismo frame (y perder 2 vidas) y que un
+    // impacto ya absorbido por el escudo mate en el mismo frame
+    if (!ship.dead && !hasShield) {
       for (const s of shooters) {
         if (dist(ship, s) < ship.radius + s.radius * 0.82) {
           killShip();
@@ -676,6 +713,9 @@ function update(dt) {
         }
       }
     }
+    // Lo absorbido se marca muerto aquí, después del filtro de la línea 658
+    asteroids = asteroids.filter(a => !a.dead);
+    shooters  = shooters.filter(s => !s.dead);
   }
 
   // Nivel completado (las estrellas fugaces no bloquean el avance a propósito)
@@ -697,40 +737,35 @@ function drawLifeIcon(x, y) {
   ctx.restore();
 }
 
-// ── Barra de tiempo del power-up de velocidad ─────────────────────────────────
-function drawSpeedBar() {
-  if (ship.speedTimer <= 0) return;
+// ── Barras de tiempo de los power-ups ─────────────────────────────────────────
+function drawTimerBar(x, y, color, label, timer, duration) {
+  const w = 130, h = 8;
 
-  const x = 14, y = 42, w = 130, h = 8;
-
-  ctx.strokeStyle = '#5cf';
+  ctx.strokeStyle = color;
   ctx.lineWidth = 1;
   ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = '#5cf';
-  ctx.fillRect(x + 1, y + 1, (w - 2) * (ship.speedTimer / SPEED_DURATION), h - 2);
+  ctx.fillStyle = color;
+  ctx.fillRect(x + 1, y + 1, (w - 2) * (timer / duration), h - 2);
 
   ctx.textAlign = 'left';
-  ctx.fillStyle = '#5cf';
+  ctx.fillStyle = color;
   ctx.font = '11px monospace';
-  ctx.fillText('VELOCIDAD x2', x, y + h + 13);
+  ctx.fillText(label, x, y + h + 13);
 }
 
-// ── Barra de tiempo del power-up de triple shot ───────────────────────────────
+function drawSpeedBar() {
+  if (ship.speedTimer <= 0) return;
+  drawTimerBar(14, 42, '#5cf', 'VELOCIDAD x2', ship.speedTimer, SPEED_DURATION);
+}
+
+function drawShieldBar() {
+  if (ship.shieldTimer <= 0) return;
+  drawTimerBar(14, 72, '#5f5', 'ESCUDO', ship.shieldTimer, SHIELD_DURATION);
+}
+
 function drawTripleBar() {
   if (ship.tripleTimer <= 0) return;
-
-  const x = 14, y = 72, w = 130, h = 8;   // y 72: debajo de la de velocidad y su etiqueta
-
-  ctx.strokeStyle = '#f6f';
-  ctx.lineWidth = 1;
-  ctx.strokeRect(x, y, w, h);
-  ctx.fillStyle = '#f6f';
-  ctx.fillRect(x + 1, y + 1, (w - 2) * (ship.tripleTimer / TRIPLE_DURATION), h - 2);
-
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#f6f';
-  ctx.font = '11px monospace';
-  ctx.fillText('TRIPLE x3', x, y + h + 13);
+  drawTimerBar(14, 102, '#f6f', 'TRIPLE x3', ship.tripleTimer, TRIPLE_DURATION);
 }
 
 // ── Nombre de la skin ─────────────────────────────────────────────────────────
@@ -756,8 +791,9 @@ function drawHUD() {
     drawLifeIcon(W - 16 - i * 22, 18);
 
   drawSkinToast();
-  // Al final porque las dos barras cambian ctx.font y textAlign del resto del HUD
+  // Al final porque las tres barras cambian ctx.font y textAlign del resto del HUD
   drawSpeedBar();
+  drawShieldBar();
   drawTripleBar();
 }
 
