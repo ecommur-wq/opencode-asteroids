@@ -1,12 +1,12 @@
 # AGENTS.md
 
-Clone de Asteroids en canvas HTML5 puro. 4 archivos, sin dependencias, sin bundler,
-sin package.json, sin tests, sin lint, sin CI. Todo el juego vive en `game.js`.
+Clone de Asteroids en canvas HTML5 puro. Sin dependencias, sin bundler, sin package.json,
+sin tests, sin lint, sin CI. Todo el juego vive en `game.js`.
 
 ## Ejecutar
 
 ```bash
-npx serve .      # README dice puerto 3000 (default de serve)
+npx serve .      # puerto 3000 por defecto
 ```
 
 También funciona abrir `index.html` con doble clic. **La única verificación del repo es
@@ -18,12 +18,25 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
 - `index.html` — canvas 800x600, carga `game.js` con `<script src>` **clásico** (sin
   `type="module"`). No hay módulos ES: no uses `import`/`export`, todo es global en un
   solo archivo. Para agregar otro `.js` hay que añadir el `<script>` en `index.html`.
-- `game.js` — clases `Bullet`, `Asteroid`, `Ship`, `Particle` + estado global del juego.
-  Convención por clase: `constructor` → `update(dt)` → `draw()`, y bandera `this.dead`
-  en vez de borrar del array (los arrays se filtran con `.filter(x => !x.dead)` al final
-  de `update`).
+- `game.js` — clases `Bullet`, `Asteroid`, `Ship`, `Particle`, `Pickup` + estado global del
+  juego. Convención por clase: `constructor` → `update(dt)` → `draw()`, y bandera
+  `this.dead` en vez de borrar del array (los arrays se filtran con `.filter(x => !x.dead)`
+  al final de `update`).
 - Máquina de estados en la variable global `state`: `'playing' | 'dead' | 'gameover'`.
-  `initGame()` arranca, `killShip()` manage vidas, `nextLevel()` limpia y regenera.
+  `initGame()` arranca, `killShip()` gestiona las vidas, `nextLevel()` limpia y regenera.
+
+## Power-up "Velocidad" (no lo rompas)
+
+- `SPEED_DURATION` (game.js:122) es **global a propósito**: lo usan `Ship.update()` para
+  fijar el timer y `drawSpeedBar()` para la proporción de la barra. No lo bajes a local.
+- `Ship.speedTimer` se inicializa en el `constructor`, **deliberadamente fuera de `reset()`**
+  (game.js:124-129): el efecto tiene que sobrevivir a la muerte y a `nextLevel()`. No lo
+  "arregles" moviéndolo a `reset()`.
+- `nextLevel()` sí limpia el array `pickups` (las entidades no sobreviven al nivel); solo el
+  buff persiste.
+- La barra se dibuja en `drawSpeedBar()` y solo aparece si `speedTimer > 0`. El HUD la
+  llama al final de `drawHUD()` porque cambia `ctx.font`; si la mueves al principio, el
+  `font` de 15px del resto del HUD se pisa.
 
 ## Gotchas (no obvios)
 
@@ -36,23 +49,24 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
   `'playing'`); ambas están precintadas por un `return` temprano.
 - **El espacio es toroidal solo para el movimiento** (`wrap()`), no para las colisiones:
   `dist()` usa coordenadas crudas, así que un objeto cerca de un borde choca mal con uno
-  cerca del borde opuesto. Si añades colisiones nuevas, no asumas que esto está resuelto.
-- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:145) se aplica por frame,
+  cerca del borde opuesto. Afecta también a los `Pickup`: uno junto a un borde es
+  incogible desde el lado opuesto. Si añades colisiones nuevas, no asumas que está resuelto.
+- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:152) se aplica por frame,
   no por segundo, y `draw()` consume `Math.random()` para la llama del propulsor. El
-  `dt` sí está acotado a 0.05 s (game.js:415), pero eso no normaliza el drag.
+  `dt` sí está acotado a 0.05 s (game.js:504), pero eso no normaliza el drag.
 - **`draw()` solo pinta el overlay de `GAME OVER`.** El estado `'dead'` no dibuja nada
   especial; si añades una pantalla de "has muerto", hay que añadirla explícitamente.
 - **Índices de tamaño de asteroide**: `1` = pequeño, `2` = mediano, `3` = grande.
   Los arrays `RADITS`/`SPEEDS`/`POINTS` (game.js:61-63) se indexan por tamaño con el
   índice `0` sin usar; `split()` decrementea el tamaño. Ojo: el array se llama `RADII`.
-- `ArrowDown` tiene `preventDefault` (game.js:15) pero no está implementado. No asumas
+- `ArrowDown` tiene `preventDefault` (game.js:16) pero no está implementado. No asumas
   que el retroceso thrust existe.
 
 ## README.md está desactualizado
 
-Describe power-ups, "estrella fugaz" y tipos especiales de asteroide que **no existen**
-en `game.js`. También omite el `NIVEL`, la pantalla de `GAME OVER` y el reinicio con
-Espacio. Trata `game.js` como fuente de verdad y corrige el README si tocas esas áreas.
+Describe "tipos especiales de asteroide" como la estrella fugaz, que **no existen** en
+`game.js`. También omite el `NIVEL`, la pantalla de `GAME OVER` y el reinicio con Espacio.
+Trata `game.js` como fuente de verdad y corrige el README si tocas esas áreas.
 
 ## Convenciones
 
