@@ -4,7 +4,7 @@ Clon del clásico arcade **Asteroids** implementado en canvas HTML5 puro, sin de
 
 ## Descripción
 
-Nave espacial en un campo de asteroides con envolvimiento de bordes (el espacio es toroidal). Destruye asteroides para sumar puntos: los grandes se parten en medianos, los medianos en pequeños. Incluye un power-up de velocidad que duplica la propulsión durante 5 segundos.
+Nave espacial en un campo de asteroides con envolvimiento de bordes (el espacio es toroidal). Destruye asteroides para sumar puntos: los grandes se parten en medianos, los medianos en pequeños. Incluye un power-up de velocidad que duplica la propulsión durante 5 segundos y dos estrellas fugaces por nivel que aparecen al empezar y se desvanecen solas a los 20 segundos.
 
 ## Tecnologías
 
@@ -30,13 +30,32 @@ Luego visita `http://localhost:3000`.
 | `↑`       | Propulsar  |
 | `Espacio` | Disparar   |
 
+En la pantalla de `GAME OVER`, `Espacio` reinicia la partida.
+
 ## Puntuación
 
-| Asteroide | Puntos |
-| --------- | ------ |
-| Grande    | 20     |
-| Mediano   | 50     |
-| Pequeño   | 100    |
+| Asteroide             | Puntos |
+| --------------------- | ------ |
+| Grande                | 20     |
+| Mediano               | 50     |
+| Pequeño               | 100    |
+| Estrella fugaz        | 150    |
+| Power-up de velocidad | 50     |
+
+## Estrella fugaz
+
+- Aparecen **2 al principio de cada nivel**, dibujadas en ámbar relleno con estela y
+  resplandor (los asteroides normales son solo contorno blanco).
+- Se mueven **más rápido que un asteroide grande** (~87 px/s frente a ~32 px/s), así que
+  hay que anticipar el tiro.
+- **No se parten**: un solo disparo las destruye y dan **+150 puntos** con una explosión
+  grande, sin soltar power-up.
+- **Desaparecen solas a los 20 segundos**; en sus últimos 3 s se atenúan y se apagan.
+  Perderlas no penaliza nada.
+- Chocan con la nave y te matan igual que un asteroide, pero **no bloquean el avance de
+  nivel**: el nivel termina cuando no queda ningún asteroide, aunque las estrellas
+  todavía estén volando.
+- Si chocas con una mientras estás destruyendo un asteroide, solo pierdes **una** vida.
 
 ## Power-up: Velocidad
 
@@ -52,3 +71,5 @@ Luego visita `http://localhost:3000`.
 - 3 vidas con invencibilidad temporal al reaparecer (parpadeo)
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
+- Niveles cada vez más poblados: 4 asteroides en el primero y `3 + nivel` en los siguientes; el nivel se muestra en el HUD como `NIVEL`
+- GAME OVER con el puntaje final y reinicio con `Espacio`
