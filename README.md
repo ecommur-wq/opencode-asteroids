@@ -4,7 +4,7 @@ Clon del clásico arcade **Asteroids** implementado en canvas HTML5 puro, sin de
 
 ## Descripción
 
-Nave espacial en un campo de asteroides con envolvimiento de bordes (el espacio es toroidal). Destruye asteroides para sumar puntos: los grandes se parten en medianos, los medianos en pequeños. Incluye un power-up de velocidad que duplica la propulsión durante 5 segundos y dos estrellas fugaces por nivel que aparecen al empezar y se desvanecen solas a los 20 segundos.
+Nave espacial en un campo de asteroides con envolvimiento de bordes (el espacio es toroidal). Destruye asteroides para sumar puntos: los grandes se parten en medianos, los medianos en pequeños. Incluye dos power-ups —velocidad y triple shot— y dos estrellas fugaces por nivel que aparecen al empezar y se desvanecen solas a los 20 segundos.
 
 ## Tecnologías
 
@@ -40,7 +40,7 @@ En la pantalla de `GAME OVER`, `Espacio` reinicia la partida.
 | Mediano               | 50     |
 | Pequeño               | 100    |
 | Estrella fugaz        | 150    |
-| Power-up de velocidad | 50     |
+| Power-up              | 50     |
 
 ## Estrella fugaz
 
@@ -57,14 +57,28 @@ En la pantalla de `GAME OVER`, `Espacio` reinicia la partida.
   todavía estén volando.
 - Si chocas con una mientras estás destruyendo un asteroide, solo pierdes **una** vida.
 
-## Power-up: Velocidad
+## Power-ups
 
-- Al destruir un asteroide hay un **8%** de probabilidad de que suelte un power-up (cuadrado cian).
-- Se recoge **pasando la nave por encima** y vale **+50 puntos**.
+Los dos sueltan un asteroide al destruirlo (**4%** el de triple shot, **8%** el de velocidad), se
+recogen **pasando la nave por encima**, valen **+50 puntos** y duran **5 segundos**. Cada uno
+puede estar activo a la vez que el otro: son temporizadores independientes y cada uno tiene su
+barra bajo el `SCORE`. El efecto **sobrevive a la muerte y al cambio de nivel** en ambos casos.
+Los power-ups sin recoger duran 10 s y parpadean antes de expirar.
+
+### Velocidad (cuadrado cian)
+
 - Duplica la propulsión durante **5 segundos**: la velocidad máxima pasa de ≈330 a ≈670 px/s.
   No afecta a la rotación ni a las balas.
-- El tiempo restante se ve en una **barra bajo el `SCORE`**; mientras dura, la llama del propulsor se dibuja cian.
-- El efecto **sobrevive a la muerte y al cambio de nivel**. El power-up sin recoger dura 10 s y parpadea antes de expirar.
+- Mientras dura, la llama del propulsor se dibuja cian.
+
+### Triple shot (círculo magenta con tres cañones)
+
+- Cada disparo sale de **3 balas** en lugar de una durante **5 segundos**.
+- Las tres van **en línea recta**, con el mismo ángulo que la nariz: no se abren en abanico,
+  solo se separan unos píxeles en perpendicular para que no nazcan solapadas en el mismo punto.
+- **No cambia la cadencia**: el cooldown entre disparos sigue siendo de 0.2 s, así que durante
+  el efecto salen 15 balas por segundo en vez de 5.
+- Mientras dura, la nariz de la nave muestra tres marcas magenta con la misma formación.
 
 ## Características
 
