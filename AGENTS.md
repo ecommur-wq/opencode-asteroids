@@ -27,16 +27,45 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
 
 ## Power-up "Velocidad" (no lo rompas)
 
+## Power-ups (no los rompas)
+
+Hay **dos**, gemelos en estructura: `Velocidad` (cian) y `Triple shot` (magenta). Cada uno
+tiene su constante de duración global, su timer en `Ship`, su barra en el HUD y su rama en
+`Pickup.draw()`.
+
 - `SPEED_DURATION` (game.js:216) es **global a propósito**: lo usan `Ship.update()` para
   fijar el timer y `drawSpeedBar()` para la proporción de la barra. No lo bajes a local.
-- `Ship.speedTimer` se inicializa en el `constructor`, **deliberadamente fuera de `reset()`**
-  (game.js:219-222): el efecto tiene que sobrevivir a la muerte y a `nextLevel()`. No lo
-  "arregles" moviéndolo a `reset()`.
-- `nextLevel()` sí limpia el array `pickups` (las entidades no sobreviven al nivel); solo el
-  buff persiste.
-- La barra se dibuja en `drawSpeedBar()` y solo aparece si `speedTimer > 0`. El HUD la
-  llama al final de `drawHUD()` porque cambia `ctx.font`; si la mueves al principio, el
-  `font` de 15px del resto del HUD se pisa.
+  `TRIPLE_DURATION` (game.js:217) es global por el mismo motivo con `Ship.update()` y
+  `drawTripleBar()`.
+- `Ship.speedTimer` y `Ship.tripleTimer` se inicializan en el `constructor`, **deliberadamente
+  fuera de `reset()`** (game.js:220-224): los efectos tienen que sobrevivir a la muerte y a
+  `nextLevel()`. No los "arregles" moviéndolos a `reset()`.
+- `nextLevel()` sí limpia el array `pickups` (las entidades no sobreviven al nivel); solo los
+  buffs persisten.
+- La barra de velocidad se dibuja en `drawSpeedBar()` y solo aparece si `speedTimer > 0`. El
+  HUD llama a las dos barras **al final** de `drawHUD()` porque cambian `ctx.font`; si mueves
+  alguna al principio, el `font` de 15px del resto del HUD se pisa. `drawTripleBar()` va en
+  `y = 72` para no solaparse con la de velocidad (que ocupa `y = 42` hasta su etiqueta).
+- `Pickup` lleva un `kind` (`'speed' | 'triple'`, default `'speed'`) que decide **el dibujo y
+  el efecto**; la recogida en `update()` ramifica por `p.kind`. No añadas un tercer power-up
+  sin pasar por `kind`.
+- **El reparto de la tirada de caída es de una sola variable** (game.js:549-551): `drop < 0.04`
+  es triple shot y `drop < 0.12` velocidad, para que un mismo punto nunca suelte los dos a la
+  vez. Ojo: los 0.08 de velocidad están **sumados** dentro del 0.12, así que subir uno sin
+  recalcular el otro cambia la probabilidad documentada del otro.
+
+## Triple shot
+
+- `Ship.tryShoot()` devuelve **3** `Bullet` con `this.angle` **idéntico** y offset lateral
+  `[-5, 0, 5]` sobre el perpendicular `angle + Math.PI/2`. "En línea recta" significa eso:
+  paralelas, **no** en abanico. Si añades una cuarta bala o cambias el ángulo, deja de ser triple
+  shot y pasa a ser un disparo en abanico.
+- **El cooldown no se toca** (`shootCooldown = 0.2`): el buff multiplica balas por disparo, no
+  la cadencia. No lo bajes para "compensar" el daño: pasa de 5 a 15 balas/s.
+- Las 3 balas no se estorban entre sí porque no hay colisión bala-bala; y en el bucle
+  bala-vs-asteroide el `!a.dead` evita que las 3 que impactan a la vez puntuen tres veces.
+- El indicador en la nariz (game.js:317-327) usa los mismos offsets `[-5, 0, 5]` a propósito:
+  muestra la formación real de salida.
 
 ## Estrella fugaz (asteroide especial)
 
@@ -52,15 +81,15 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
 - `split()` devuelve `[]` explícitamente. No depende del `if (this.size <= 1) return []`
   de `Asteroid` a propósito: "no se divide" está escrito, no implícito.
 - **No bloquea el avance de nivel.** El check sigue siendo solo
-  `if (asteroids.length === 0) nextLevel()` (game.js:558): `shooters` se ignora. Si añades
+  `if (asteroids.length === 0) nextLevel()` (game.js:605): `shooters` se ignora. Si añades
   shooters al check, dejas una estrella huérvana arrastrada al nivel siguiente.
 - `nextLevel()` limpia `shooters` (las entidades no sobreviven al nivel, igual que
   `pickups`). La rama `'gameover'` de `update()` **no** actualiza `shooters`: si lo hiciera,
   se filtrarían en `GAME OVER` sin dibujarse. En `'dead'` sí se mueven, como los asteroides,
-  y hay que filtrarlas ahí (game.js:473-475) porque son lo único que puede morir sin bala:
+  y hay que filtrarlas ahí (game.js:515-517) porque son lo único que puede morir sin bala:
   sin ese filtro la estrella caducada seguiría dibujándose hasta 2 s, con el `fade` ya en
   negativo.
-- El bucle de colisión nave-vs-`Shooter` está **guardado con `if (!ship.dead)`** (game.js:547)
+- El bucle de colisión nave-vs-`Shooter` está **guardado con `if (!ship.dead)`** (game.js:594)
   porque va después del de asteroides: sin esa guarda, tocar un asteroide y una estrella en
   el mismo frame descuenta 2 vidas y deja `lives` en negativo.
 - La estela (`Shooter.trail`, 14 muestras) y el `shadowBlur` del resplandor son solo
@@ -81,9 +110,9 @@ añades tooling (package.json, lint, tests), documéntalo aquí.
   incogible desde el lado opuesto, y a las `Shooter`, que son rápidas y por eso pasan más
   tiempo cerca de los bordes (tienen una ventana de colisión peor). Si añades colisiones
   nuevas, no asumas que está resuelto.
-- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:246) se aplica por frame,
+- **Física dependiente del framerate**: `DRAG = 0.987` (game.js:249) se aplica por frame,
   no por segundo, y `draw()` consume `Math.random()` para la llama del propulsor. El
-  `dt` sí está acotado a 0.05 s (game.js:644), pero eso no normaliza el drag.
+  `dt` sí está acotado a 0.05 s (game.js:711), pero eso no normaliza el drag.
 - **`draw()` solo pinta el overlay de `GAME OVER`.** El estado `'dead'` no dibuja nada
   especial; si añades una pantalla de "has muerto", hay que añadirla explícitamente.
 - **Índices de tamaño de asteroide**: `1` = pequeño, `2` = mediano, `3` = grande.

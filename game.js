@@ -213,12 +213,14 @@ class Shooter {
 }
 
 // ── Ship ──────────────────────────────────────────────────────────────────────
-const SPEED_DURATION = 5;  // s que dura el power-up de velocidad
+const SPEED_DURATION  = 5;  // s que dura el power-up de velocidad
+const TRIPLE_DURATION = 5;  // s que dura el power-up de triple shot
 
 class Ship {
   constructor() {
-    // A propósito fuera de reset(): el efecto sobrevive a la muerte y al cambio de nivel
+    // A propósito fuera de reset(): los efectos sobreviven a la muerte y al cambio de nivel
     this.speedTimer = 0;
+    this.tripleTimer = 0;
     this.reset();
   }
 
@@ -240,6 +242,7 @@ class Ship {
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
     if (this.speedTimer    > 0) this.speedTimer    -= dt;
+    if (this.tripleTimer   > 0) this.tripleTimer   -= dt;
 
     const ROT   = 3.5;   // rad/s
     const THRUST = 260 * (this.speedTimer > 0 ? 2 : 1);  // px/s² (x2 con "Velocidad")
@@ -264,9 +267,19 @@ class Ship {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
     const NOSE = 21;
-    const ox = this.x + Math.cos(this.angle) * NOSE;
-    const oy = this.y + Math.sin(this.angle) * NOSE;
-    return [new Bullet(ox, oy, this.angle)];
+    const nx = Math.cos(this.angle);
+    const ny = Math.sin(this.angle);
+
+    // Triple shot: las 3 balas salen con el MISMO ángulo (línea recta hacia delante) y se
+    // separan solo en perpendicular unos píxeles, para que no se solapen en un solo punto
+    if (this.tripleTimer > 0) {
+      const px = Math.cos(this.angle + Math.PI / 2);
+      const py = Math.sin(this.angle + Math.PI / 2);
+      return [-5, 0, 5].map(o =>
+        new Bullet(this.x + nx * NOSE + px * o, this.y + ny * NOSE + py * o, this.angle));
+    }
+
+    return [new Bullet(this.x + nx * NOSE, this.y + ny * NOSE, this.angle)];
   }
 
   draw() {
@@ -299,6 +312,18 @@ class Ship {
       ctx.lineTo(-8,  4);
       ctx.strokeStyle = boost ? '#5cf' : 'rgba(255, 130, 0, 0.85)';
       ctx.stroke();
+    }
+
+    // Triple shot: tres marcas magenta en la nariz, la misma formación que dispara
+    if (this.tripleTimer > 0) {
+      ctx.strokeStyle = '#f6f';
+      ctx.lineWidth = 1.5;
+      for (const o of [-5, 0, 5]) {
+        ctx.beginPath();
+        ctx.moveTo(22, o);
+        ctx.lineTo(28, o);
+        ctx.stroke();
+      }
     }
 
     ctx.restore();
@@ -337,11 +362,12 @@ class Particle {
   }
 }
 
-// ── Power-up (Velocidad) ──────────────────────────────────────────────────────
+// ── Power-ups (Velocidad / Triple shot) ───────────────────────────────────────
 class Pickup {
-  constructor(x, y) {
+  constructor(x, y, kind = 'speed') {
     this.x = x;
     this.y = y;
+    this.kind = kind;   // 'speed' | 'triple'
     this.vx = rand(-25, 25);
     this.vy = rand(-25, 25);
     this.rot = rand(0, Math.PI * 2);
@@ -366,16 +392,32 @@ class Pickup {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.rot);
-    ctx.strokeStyle = '#5cf';
     ctx.lineWidth = 1.5;
-    ctx.lineJoin = 'round';
-    ctx.beginPath();
-    ctx.moveTo(-s, -s);
-    ctx.lineTo( s, -s);
-    ctx.lineTo( s,  s);
-    ctx.lineTo(-s,  s);
-    ctx.closePath();
-    ctx.stroke();
+    ctx.lineJoin    = 'round';
+
+    if (this.kind === 'triple') {
+      // Círculo con tres cañones, la misma formación en línea que dispara la nave
+      ctx.strokeStyle = '#f6f';
+      ctx.beginPath();
+      ctx.arc(0, 0, s, 0, Math.PI * 2);
+      ctx.stroke();
+      for (const o of [-4, 0, 4]) {
+        ctx.beginPath();
+        ctx.moveTo(o, -s * 0.55);
+        ctx.lineTo(o,  s * 0.55);
+        ctx.stroke();
+      }
+    } else {
+      ctx.strokeStyle = '#5cf';
+      ctx.beginPath();
+      ctx.moveTo(-s, -s);
+      ctx.lineTo( s, -s);
+      ctx.lineTo( s,  s);
+      ctx.lineTo(-s,  s);
+      ctx.closePath();
+      ctx.stroke();
+    }
+
     ctx.restore();
   }
 }
@@ -502,7 +544,11 @@ function update(dt) {
         a.dead = true;
         score += POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
-        if (Math.random() < 0.08) pickups.push(new Pickup(a.x, a.y));
+        // Una sola tirada para que un mismo punto no suelte los dos power-ups:
+        // 4% triple shot y 8% velocidad (la de velocidad conserva su probabilidad)
+        const drop = Math.random();
+        if (drop < 0.04)     pickups.push(new Pickup(a.x, a.y, 'triple'));
+        else if (drop < 0.12) pickups.push(new Pickup(a.x, a.y));
         newAsteroids.push(...a.split());
       }
     }
@@ -526,12 +572,13 @@ function update(dt) {
   shooters = shooters.filter(s => !s.dead);
   bullets  = bullets.filter(b => !b.dead);
 
-  // Recoger power-up de velocidad
+  // Recoger power-up
   for (const p of pickups) {
     if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
-      ship.speedTimer = SPEED_DURATION;
       score += 50;
+      if (p.kind === 'triple') ship.tripleTimer = TRIPLE_DURATION;
+      else                      ship.speedTimer  = SPEED_DURATION;
     }
   }
 
@@ -594,6 +641,24 @@ function drawSpeedBar() {
   ctx.fillText('VELOCIDAD x2', x, y + h + 13);
 }
 
+// ── Barra de tiempo del power-up de triple shot ───────────────────────────────
+function drawTripleBar() {
+  if (ship.tripleTimer <= 0) return;
+
+  const x = 14, y = 72, w = 130, h = 8;   // y 72: debajo de la de velocidad y su etiqueta
+
+  ctx.strokeStyle = '#f6f';
+  ctx.lineWidth = 1;
+  ctx.strokeRect(x, y, w, h);
+  ctx.fillStyle = '#f6f';
+  ctx.fillRect(x + 1, y + 1, (w - 2) * (ship.tripleTimer / TRIPLE_DURATION), h - 2);
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#f6f';
+  ctx.font = '11px monospace';
+  ctx.fillText('TRIPLE x3', x, y + h + 13);
+}
+
 function drawHUD() {
   ctx.fillStyle = '#fff';
   ctx.font = '15px monospace';
@@ -607,7 +672,9 @@ function drawHUD() {
   for (let i = 0; i < lives; i++)
     drawLifeIcon(W - 16 - i * 22, 18);
 
+  // Al final porque las dos barras cambian ctx.font y textAlign del resto del HUD
   drawSpeedBar();
+  drawTripleBar();
 }
 
 function drawOverlay(title, sub) {
